@@ -1,0 +1,11 @@
+apiVersion: v2
+name: k8s-media-center
+description: A Helm chart for Docker Media center
+version: 0.1.0
+appVersion: 1.0.0
+type: application
+keywords:
+  - k8s-media-center
+maintainers:
+  - name: David O Neill
+    email: dmz.oneill@gmail.com

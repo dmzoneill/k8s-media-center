@@ -1,0 +1,112 @@
+{% set applications = [
+    {'name': 'amd', 'ports': [5299]},
+    {'name': 'sonarr', 'ports': [8989]},
+    {'name': 'bazarr', 'ports': [6767]},
+    {'name': 'calibre', 'ports': [8080, 8081]},
+    {'name': 'deluge', 'ports': [8112, 55555]},
+    {'name': 'jackett', 'ports': [9117]},
+    {'name': 'librarian', 'ports': [8112]},
+    {'name': 'lidarr', 'ports': [8686]},
+    {'name': 'mylar3', 'ports': [8090]},
+    {'name': 'organizr', 'ports': [9134]},
+    {'name': 'plex', 'ports': [32400]},
+    {'name': 'privoxy', 'ports': [8118]},
+    {'name': 'prowlarr', 'ports': [8787]},
+    {'name': 'radarr', 'ports': [7878]},
+    {'name': 'readarr', 'ports': [8787]},
+    {'name': 'squid', 'ports': [3128]},
+    {'name': 'tdarr', 'ports': [8265, 8266]},
+    {'name': 'tracktar', 'ports': [7777]}
+] %}
+
+{% for app in applications %}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ app.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ app.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app.name }}
+    spec:
+      containers:
+      - name: {{ app.name }}
+        image: {% if app.name == 'deluge' %}
+deluge
+{% elif app.name == 'squid' %}
+minimum2scp/squid:latest
+{% elif app.name == 'privoxy' %}
+ajoergensen/privoxy:latest
+{% elif app.name == 'jackett' %}
+linuxserver/jackett:latest
+{% elif app.name == 'radarr' %}
+linuxserver/radarr:develop
+{% elif app.name == 'sonarr' %}
+linuxserver/sonarr:develop
+{% elif app.name == 'lidarr' %}
+linuxserver/lidarr
+{% elif app.name == 'prowlarr' %}
+linuxserver/prowlarr:latest
+{% elif app.name == 'bazarr' %}
+linuxserver/bazarr
+{% elif app.name == 'mylar3' %}
+linuxserver/mylar3
+{% elif app.name == 'tdarr' %}
+haveagitgat/tdarr
+{% elif app.name == 'plex' %}
+linuxserver/plex:latest
+{% elif app.name == 'readarr' %}
+linuxserver/readarr:develop
+{% elif app.name == 'organizr' %}
+organizr/organizr
+{% elif app.name == 'amd' %}
+randomninjaatk/amd
+{% elif app.name == 'calibre' %}
+ghcr.io/linuxserver/calibre
+{% elif app.name == 'librarian' %}
+linuxserver/lazylibrarian
+{% elif app.name == 'tracktar' %}
+ghcr.io/linuxserver/tracktar
+{% endif %}
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Etc/UTC"
+        ports:
+{% for port in app.ports %}
+        - containerPort: {{ port }}
+{% endfor %}
+        volumeMounts:
+        - name: {{ app.name }}-config
+          mountPath: /config
+      volumes:
+      - name: {{ app.name }}-config
+        persistentVolumeClaim:
+          claimName: {{ app.name }}-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ app.name }}
+spec:
+  type: NodePort
+  selector:
+    app: {{ app.name }}
+  ports:
+    {% for port in app.ports %}
+- name: {{ app.name }}-{{ port }}
+      protocol: TCP
+      port: {{ port }}
+      targetPort: {{ port }}
+    {% endfor %}
+{% endfor %}

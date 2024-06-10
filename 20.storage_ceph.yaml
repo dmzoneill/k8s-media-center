@@ -1,0 +1,170 @@
+---
+- hosts: vms
+  vars_files:
+    - facts/infra.yaml
+  become: true
+  vars:
+    fsid: "{{ lookup('pipe', 'python -c \"import uuid; print(uuid.uuid4())\"') }}"
+    mon_initial_members: "{{ groups['vms'] | join(',') }}"
+    mon_hosts: "{{ groups['vms'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+  tasks:
+
+    - name: Install Ceph dependencies
+      dnf:
+        name:
+          - ceph
+          - ceph-common
+          - ceph-mds
+          - ceph-mgr
+          - ceph-mon
+          - ceph-osd
+          - ceph-base
+          - ceph-fuse
+          - ceph-mgr-modules-core
+          - python3-ceph-argparse
+          - python3-ceph-common
+          - lvm2
+        state: present
+        update_cache: yes
+
+    - name: Generate Ceph FSID
+      command: uuidgen
+      register: fsid_result
+
+    - name: Generate ceph.conf file
+      template:
+        src: templates/ceph.conf.j2
+        dest: /etc/ceph/ceph.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+- hosts: vms
+  become: true
+  tasks:
+
+    - name: Ensure ceph directory exists
+      file:
+        path: /etc/ceph
+        state: directory
+
+    - name: Ensure bootstrap-osd directory exists
+      file:
+        path: /var/lib/ceph/bootstrap-osd
+        state: directory
+
+    - name: Create empty OSD bootstrap keyring file
+      command: touch /etc/ceph/ceph.client.bootstrap-osd.keyring
+      args:
+        creates: /etc/ceph/ceph.client.bootstrap-osd.keyring
+
+    - name: Create empty OSD keyring file
+      command: touch /var/lib/ceph/bootstrap-osd/ceph.keyring
+      args:
+        creates: /var/lib/ceph/bootstrap-osd/ceph.keyring
+
+    - name: Generate OSD bootstrap keyring
+      command: ceph-authtool --gen-key --name=client.bootstrap-osd /etc/ceph/ceph.client.bootstrap-osd.keyring
+
+    - name: Generate OSD keyring
+      command: ceph-authtool --gen-key --name=osd.{{ inventory_hostname }} /var/lib/ceph/bootstrap-osd/ceph.keyring
+      args:
+        creates: /var/lib/ceph/bootstrap-osd/ceph.keyring
+
+    - name: Ensure Manager directory exists
+      file:
+        path: /var/lib/ceph/mgr/ceph-{{ inventory_hostname }}
+        state: directory
+
+    - name: Create the monitor keyring
+      command: ceph-authtool --create-keyring /etc/ceph/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
+
+    - name: Create the crash keyring
+      command: ceph-authtool --create-keyring /etc/ceph/ceph.client.crash.keyring --gen-key -n client.crash --cap mon 'allow r' --cap osd 'allow *' --cap mgr 'allow *'
+
+    - name: Create the manager keyring
+      command: ceph-authtool --create-keyring /var/lib/ceph/mgr/ceph-{{ inventory_hostname }}/keyring --gen-key -n client.admin --cap mon 'allow *' --cap osd 'allow *' --cap mgr 'allow *' --cap mds 'allow'
+
+    - name: Fix permissions for monitor data directory
+      become: true
+      become_user: root
+      file:
+        path: /var/lib/ceph/mgr/ceph-{{ inventory_hostname }}/keyring
+        owner: ceph
+        group: ceph
+        mode: '0750'
+      ignore_errors: true
+
+    - name: Initialize monitor data directory
+      command: ceph-mon --mkfs -i {{ inventory_hostname }} --cluster ceph --keyring /etc/ceph/ceph.mon.keyring
+      ignore_errors: true
+
+    - name: Fix permissions for monitor data directory
+      become: true
+      become_user: root
+      file:
+        path: /var/lib/ceph/mon/ceph-{{ inventory_hostname }}
+        owner: ceph
+        group: ceph
+        mode: '0750'
+      ignore_errors: true
+
+    - name: Start the monitor daemon
+      command: systemctl start ceph-mon@{{ inventory_hostname }}
+      ignore_errors: true
+
+    - name: Enable the monitor daemon
+      command: systemctl enable ceph-mon@{{ inventory_hostname }}
+
+    - name: Set ownership and permissions on /var/lib/ceph directory
+      file:
+        path: /var/lib/ceph
+        owner: ceph
+        group: ceph
+        mode: "0755"
+        recurse: yes
+        state: directory
+
+    - name: Reboot the machine
+      reboot:
+        msg: "Rebooting after initial setup"
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        reboot_timeout: 600
+
+    - name: Wait for the machine to come back online
+      wait_for_connection:
+        timeout: 300
+
+- hosts: master
+  become: true
+  tasks:
+    - name: Start the manager daemon
+      command: systemctl start ceph-mgr@{{ inventory_hostname }}
+      ignore_errors: true
+
+    - name: Enable the manager daemon
+      command: systemctl enable ceph-mgr@{{ inventory_hostname }}
+
+- hosts: vms
+  become: true
+  tasks:
+
+    - name: Prepare OSD disk
+      command: ceph-volume lvm create --data /dev/vdb
+
+    - name: Collect OSD IDs
+      command: ceph-volume lvm list --format=json
+      register: osd_ids_output
+
+    - name: Set OSD IDs fact
+      set_fact:
+        osd_ids: "{{ osd_ids_output.stdout | from_json | dict2items | selectattr('key', 'match', '.*osd.*') | map(attribute='key') | list }}"
+
+    - name: Start the OSD daemon
+      command: systemctl start ceph-osd@{{ item }}
+      with_items: "{{ osd_ids }}"
+
+    - name: Enable the OSD daemon
+      command: systemctl enable ceph-osd@{{ item }}
+      with_items: "{{ osd_ids }}"

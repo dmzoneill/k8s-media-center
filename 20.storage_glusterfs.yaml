@@ -1,0 +1,27 @@
+---
+- name: Setup GlusterFS Cluster
+  hosts: master
+  vars_files:
+    - facts/infra.yaml
+  tasks:
+
+    - name: Apply GlusterFS taints
+      command: kubectl label node {{ item.name }} storagenode=glusterfs
+      with_items: "{{ vms }}"
+      ignore_errors: true
+    
+    - name: Apply GlusterFS daemonset
+      command: kubectl apply -f https://raw.githubusercontent.com/mvallim/kubernetes-under-the-hood/master/gluster/glusterfs-daemonset.yaml 
+      ignore_errors: true
+
+    - name: Apply GlusterFS storage class
+      command: kubectl apply -f https://raw.githubusercontent.com/mvallim/kubernetes-under-the-hood/master/gluster/storage-class.yaml
+      ignore_errors: true
+
+    - name: Apply GlusterFS RBAC
+      command: kubectl apply -f https://raw.githubusercontent.com/mvallim/kubernetes-under-the-hood/master/gluster/rbac.yaml
+      ignore_errors: true
+
+    - name: Apply GlusterFS Provisioner
+      command: kubectl apply -f https://raw.githubusercontent.com/mvallim/kubernetes-under-the-hood/master/gluster/glusterfs-simple-provisioner.yaml
+      ignore_errors: true

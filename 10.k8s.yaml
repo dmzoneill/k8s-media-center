@@ -1,0 +1,146 @@
+- name: Configure Kubernetes Master  
+  vars_files:
+    - facts/infra.yaml
+  gather_facts: yes
+  hosts: master
+  tasks:
+
+    - name: Check if Kubernetes master has already been initialized
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: kubeadm_initialized
+
+    - name: Initialize Kubernetes master node
+      shell: kubeadm init --pod-network-cidr={{ POD_CIDR }}
+      register: kubeadm_init
+      become: yes
+      when: not kubeadm_initialized.stat.exists
+
+    - name: Create .kube directory for regular user
+      become: yes
+      become_user: "{{ ansible_user }}"
+      file:
+        path: "{{ ansible_user_dir }}/.kube"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Kube config to regular user .kube directory
+      become: yes
+      become_user: "{{ ansible_user }}"
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ ansible_user_dir }}/.kube/config"
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Restart service containerd
+      ansible.builtin.systemd_service:
+        state: restarted
+        daemon_reload: true
+        name: containerd
+
+    - name: Reboot the machine
+      reboot:
+        msg: "Rebooting after initial setup"
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        reboot_timeout: 600
+
+    - name: Wait for the machine to come back online
+      wait_for_connection:
+        timeout: 300
+
+    - name: Install Flannel networking
+      become: yes
+      shell: kubectl apply -f "{{ NET_MGR }}"
+      environment:
+        KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+
+    - name: Get join command for worker nodes
+      shell: kubeadm token create --print-join-command
+      register: kubeadm_token
+      become: yes
+
+    - name: Set join command fact
+      set_fact:
+        join_command: "{{ kubeadm_token.stdout }}"
+      delegate_to: "{{ item }}"
+      with_items: "{{ groups['master'] }}"
+      run_once: yes
+
+- name: Configure Kubernetes Worker Nodes
+  hosts: slaves
+  tasks:
+    - name: Join Kubernetes cluster
+      shell: "{{ hostvars[groups['master'][0]]['join_command'] }} --ignore-preflight-errors=all"
+      become: yes
+
+- name: Configure CNI/CRI
+  hosts: vms
+  tasks:
+    - name: Install CNI plugins
+      become: yes
+      shell: |
+        mkdir -p /opt/cni/bin
+        curl -O -L https://github.com/containernetworking/plugins/releases/download/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz
+        tar -C /opt/cni/bin -xzf cni-plugins-linux-amd64-v1.2.0.tgz
+      ignore_errors: true
+
+    - name: Create bridge CNI configuration
+      copy:
+        dest: /etc/cni/net.d/10-bridge.conf
+        content: |
+          {
+            "cniVersion": "0.4.0",
+            "name": "bridge",
+            "type": "bridge",
+            "bridge": "cni0",
+            "isGateway": true,
+            "ipMasq": true,
+            "ipam": {
+              "type": "host-local",
+              "subnet": "10.22.0.0/16",
+              "routes": [
+                { "dst": "0.0.0.0/0" }
+              ]
+            }
+          }
+
+    - name: Create loopback CNI configuration
+      copy:
+        dest: /etc/cni/net.d/99-loopback.conf
+        content: |
+          {
+            "cniVersion": "0.4.0",
+            "name": "lo",
+            "type": "loopback"
+          }
+
+    - name: Overwrite containerd config.toml
+      template:
+        src: templates/config.toml.j2
+        dest: /etc/containerd/config.toml
+
+    - name: Restart service kubelet with custom CNI plugin directory
+      ansible.builtin.systemd_service:
+        state: restarted
+        daemon_reload: true
+        name: kubelet
+      vars:
+        daemon_reload: true
+        name: kubelet
+        arguments:
+          kubelet_extra_args: "--network-plugin-dir=/opt/cni/bin"
+
+    - name: Reboot the machine
+      reboot:
+        msg: "Rebooting after initial setup"
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        reboot_timeout: 600
+
+    - name: Wait for the machine to come back online
+      wait_for_connection:
+        timeout: 300

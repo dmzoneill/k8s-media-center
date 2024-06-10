@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vpn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vpn
+  template:
+    metadata:
+      labels:
+        app: vpn
+    spec:
+      containers:
+        - name: vpn
+          image: dperson/openvpn-client:latest
+          ports:
+            - containerPort: 8112
+            - containerPort: 55555
+          volumeMounts:
+            - name: vpn-volume
+              mountPath: /vpn
+            - name: home-volume
+              mountPath: /data
+      volumes:
+        - name: vpn-volume
+          emptyDir: {}
+        - name: home-volume
+          emptyDir: {}

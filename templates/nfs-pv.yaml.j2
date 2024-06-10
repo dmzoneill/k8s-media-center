@@ -1,0 +1,32 @@
+{% set applications = [
+    'amd', 'sonarr', 'bazarr', 'calibre', 'deluge', 'jackett', 'librarian', 
+    'lidarr', 'mylar3', 'organizr', 'plex', 'privoxy', 'prowlarr', 
+    'radarr', 'readarr', 'squid', 'tdarr', 'tracktar'
+] %}
+
+{% for app in applications %}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ app }}-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: {{ hostvars['localhost']['local_ip']['stdout'] }}
+    path: /home/dave/src/cluster/nfs/{{ app }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ app }}-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+{% endfor %}

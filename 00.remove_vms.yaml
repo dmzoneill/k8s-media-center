@@ -1,0 +1,33 @@
+---
+- name: Remove Kubernetes VMs
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
+  tasks:
+
+    - name: Ensure the VMs are shut down
+      command: >
+        virsh destroy {{ item.name }}
+      with_items: "{{ vms }}"
+      ignore_errors: true
+
+    - name: Undefine the VMs and remove all storage
+      command: >
+        virsh undefine {{ item.name }} --remove-all-storage
+      with_items: "{{ vms }}"
+      ignore_errors: true
+
+    - name: Remove thin-provisioned disk images
+      file:
+        path: "{{ PLAYBOOK_DIR }}/{{ item.name }}.qcow2"
+        state: absent
+      with_items: "{{ vms }}"
+      ignore_errors: true
+
+    - name: Remove thin-provisioned disk images
+      file:
+        path: "{{ PLAYBOOK_DIR }}/{{ item.name }}-data.qcow2"
+        state: absent
+      with_items: "{{ vms }}"
+      ignore_errors: true

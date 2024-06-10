@@ -1,0 +1,35 @@
+---
+- hosts: master
+  vars_files:
+    - facts/infra.yaml
+  become: true
+  tasks:
+
+    - name: Apply GlusterFS taints
+      command: kubectl label node {{ item.name }} storagenode=glusterfs
+      with_items: "{{ vms }}"
+      ignore_errors: true
+    
+    - name: Apply Ceph rook crds
+      command: kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
+      ignore_errors: true
+
+    - name: Apply Ceph rook common
+      command: kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
+      ignore_errors: true
+
+    - name: Apply Ceph rook operator
+      command: kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
+      ignore_errors: true
+
+    - name: Apply Ceph rook Operator
+      command: kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster.yaml
+      ignore_errors: true
+
+    - name: Apply Ceph rook toolbox
+      command: kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
+      ignore_errors: true
+
+    - name: Apply Ceph rook Operator
+      command: kubectl -n rook-ceph rollout status deploy/rook-ceph-tools
+      ignore_errors: true

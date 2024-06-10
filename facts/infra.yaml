@@ -1,0 +1,27 @@
+# facts.yml
+PLAYBOOK_DIR: /home/dave/src/cluster
+SHARED_MOUNT_POINT: shared_data
+MOUNT_POINT: /data
+POD_CIDR: 10.244.0.0/16
+default_route: 192.168.0.70
+primary_interface: enp2s0
+NET_MGR: "\"https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml\""
+PROXY: http://192.168.0.30:3128
+BASE_QCOW_IMAGE: fedora.qcow2
+
+# ceph
+public_network: 192.168.122.0/24
+cluster_network: 172.76.0.0/24
+monitoring_interface: enp2s0
+
+# libvirt user
+libvirt_user: dave
+
+# VMs
+vms:
+  - name: "k8s1"
+    cpuset: "1,2"
+  - name: "k8s2"
+    cpuset: "3,4"
+  - name: "k8s3"
+    cpuset: "5,6"

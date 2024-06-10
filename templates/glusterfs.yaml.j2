@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glusterfs-provisioner
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: glusterfs-provisioner-runner
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch", "update"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: glusterfs-provisioner-role
+subjects:
+  - kind: ServiceAccount
+    name: glusterfs-provisioner
+    namespace: default  # Adjust the namespace if needed
+roleRef:
+  kind: ClusterRole
+  name: glusterfs-provisioner-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glusterfs-config
+data:
+  # Add your GlusterFS configuration here
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glusterfs-provisioner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glusterfs-provisioner
+  template:
+    metadata:
+      labels:
+        app: glusterfs-provisioner
+    spec:
+      serviceAccountName: glusterfs-provisioner
+      containers:
+        - name: glusterfs-provisioner
+          image: quay.io/external_storage/glusterfs-provisioner:latest
+          volumeMounts:
+            - name: glusterfs-config
+              mountPath: /etc/glusterfs
+      volumes:
+        - name: glusterfs-config
+          configMap:
+            name: glusterfs-config

@@ -1,0 +1,26 @@
+---
+- name: Get local IP address
+  hosts: localhost
+  tasks:
+    - name: Get local IP address
+      shell: hostname -I | cut -d' ' -f1
+      register: local_ip
+
+- name: Render PV definition template
+  hosts: master
+  gather_facts: false
+  tasks:
+    - name: Set fact
+      set_fact:
+        nfs_server_ip: "{{ hostvars['localhost']['local_ip']['stdout'] }}"
+      
+    - name: Render PV definition template
+      template:
+        src: templates/nfs-pv.yaml.j2
+        dest: nfs-pv.yaml
+      vars:
+        nfs_server_ip: "{{ nfs_server_ip }}"
+
+    - name: Apply PV
+      command: kubectl apply -f nfs-pv.yaml
+      ignore_errors: true

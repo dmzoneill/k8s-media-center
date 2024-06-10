@@ -1,0 +1,39 @@
+---
+- name: Create Kubernetes VMs
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
+  tasks:
+
+    - name: Create thin-provisioned disk images
+      command: >
+        qemu-img create -f qcow2 -F qcow2 -b {{ PLAYBOOK_DIR }}/storage/{{ BASE_QCOW_IMAGE }}
+        {{ PLAYBOOK_DIR }}/storage/{{ item.name }}.qcow2
+      with_items: "{{ vms }}"
+      when: not ('vm_created' in item)
+
+    - name: Define and start the VMs
+      command: >
+        virt-install
+        --name {{ item.name }}
+        --memory 4096
+        --memorybacking hugepages=on
+        --vcpus 2,sockets=1,cores=2,threads=1
+        --disk path={{ PLAYBOOK_DIR }}/storage/{{ item.name }}.qcow2,format=qcow2
+        --disk path={{ PLAYBOOK_DIR }}/storage/{{ item.name }}-data.qcow2,size=20,format=qcow2    
+        --filesystem source={{ PLAYBOOK_DIR }}/{{ SHARED_MOUNT_POINT }},target=hostshare,accessmode=passthrough
+        --network network=default,model=virtio
+        --graphics none
+        --video vga
+        --console pty,target_type=serial
+        --noautoconsole
+        --import
+        --iothreads=4
+        --os-variant=fedora37
+        --cpu host-passthrough,cache.mode=passthrough 
+        --cpuset={{ item.cpuset }}
+      with_items: "{{ vms }}"
+      when: not ('vm_created' in item)
+      register: vm_created
+      ignore_errors: yes

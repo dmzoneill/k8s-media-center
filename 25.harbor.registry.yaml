@@ -1,0 +1,90 @@
+---
+- name: Setup Harbor container registry on Fedora
+  hosts: registry
+  become: true
+  tasks:
+
+    - name: Install necessary packages
+      dnf:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - docker
+        - python3-pip
+
+    - name: Install Docker Compose via pip
+      pip:
+        name: docker-compose
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Download Harbor installer
+      get_url:
+        url: https://github.com/goharbor/harbor/releases/download/v2.11.0/harbor-online-installer-v2.11.0.tgz
+        dest: /tmp/harbor-online-installer.tgz
+
+    - name: Extract Harbor installer
+      unarchive:
+        src: /tmp/harbor-online-installer.tgz
+        dest: /opt
+        remote_src: yes
+
+    - name: Copy Harbor configuration template
+      template:
+        src: harbor.yml.j2
+        dest: /opt/harbor/harbor.yml
+
+    - name: Install Harbor
+      shell: |
+        cd /opt/harbor
+        ./install.sh
+
+    - name: Ensure Harbor is running
+      docker_compose:
+        project_src: /opt/harbor
+        state: present
+        restarted: true
+
+- name: Configure Kubernetes to use the Harbor registry
+  hosts: k8s_nodes
+  become: true
+  tasks:
+    - name: Create Docker config directory
+      file:
+        path: /etc/docker
+        state: directory
+
+    - name: Create Docker daemon.json file for insecure registry
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "insecure-registries" : ["{{ hostvars['registry'].ansible_default_ipv4.address }}"]
+          }
+
+    - name: Restart Docker to apply the new configuration
+      systemd:
+        name: docker
+        state: restarted
+        enabled: yes
+
+    - name: Create a Kubernetes secret for the Harbor registry
+      shell: |
+        kubectl create secret docker-registry harbor-regcred \
+          --docker-server={{ hostvars['registry'].ansible_default_ipv4.address }} \
+          --docker-username=admin \
+          --docker-password=Harbor12345 \
+          --docker-email=admin@example.com
+      args:
+        creates: /etc/kubernetes/harbor-registry-secret-created
+
+    - name: Patch the default service account to use the registry secret
+      shell: |
+        kubectl patch serviceaccount default \
+          -p '{"imagePullSecrets": [{"name": "harbor-regcred"}]}'
+      args:
+        creates: /etc/kubernetes/harbor-registry-patch-done
