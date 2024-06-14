@@ -15,6 +15,7 @@ _ := $(shell sed -i 's|^PLAYBOOK_DIR:.*|PLAYBOOK_DIR: $(PLAYBOOK_DIR)|' facts/in
 20_STORAGE_NFS_PV_PLAYBOOK = 20.storage.nfs_pv.yaml
 25_HARBOR_PLAYBOOK = 25.harbor.registry.yaml
 27_GRAFANA_PROMETHOUS_PLAYBOOK = 27.grafana-prometheus.yaml
+28_CADVISOR_PLAYBOOK = 28.cadvisor.yaml
 30_MEDIA_CENTER_PLAYBOOK = 30.media_center.yaml
 90_K8SLOCAL_PLAYBOOK = 90.k8s_local.yaml
 
@@ -23,11 +24,11 @@ INVENTORY = inventory.ini
 BASIC_AUTH = --user root --extra-vars "ansible_ssh_pass=123456"
 
 # Targets
-.PHONY: all destroy create prep k8s k8s-local nfs harbor grafnaprom mediacenter
+.PHONY: all destroy create inventory ssh prep k8s k8s-local nfs harbor cadvisor grafanaprom mediacenter
 
-all: destroy create prep k8s k8s-local nfs harbor grafnaprom mediacenter
+all: destroy create inventory ssh prep k8s k8s-local nfs harbor cadvisor grafanaprom mediacenter
 
-postcreate: prep k8s
+postcreate: inventory prep k8s
 
 destroy:
 	sudo ansible-playbook $(PLAYBOOK_DIR)/$(00_DESTROY_PLAYBOOK)
@@ -35,18 +36,17 @@ destroy:
 create:
 	sudo ansible-playbook $(PLAYBOOK_DIR)/$(01_CREATE_PLAYBOOK)
 
-prep:
+inventory:
 	python3 ${PLAYBOOK_DIR}/${INVENTORY_SCRIPT} > ./inventory/inventory.ini
+
+ssh:
 	ansible-playbook ${02_CONFIGURE_SSH} ${BASIC_AUTH}
+
+prep:		
 	ansible-playbook ${03_CONFIGURE_PLAYBOOK}
 
 k8s:
 	ansible-playbook ${10_K8S_PLAYBOOK}
-
-k8s-local:
-	rm -rvf ~/.kube/confg
-	ansible-playbook ${90_K8SLOCAL_PLAYBOOK}
-
 ceph:
 	ansible-playbook ${20_STORAGE_CEPH_PLAYBOOK}
 
@@ -62,11 +62,18 @@ nfs:
 harbor:
 	ansible-playbook ${25_HARBOR_PLAYBOOK}
 
-grafnaprom:
+grafanaprom:
 	ansible-playbook ${27_GRAFANA_PROMETHOUS_PLAYBOOK}
+
+cadvisor:
+	ansible-playbook ${28_CADVISOR_PLAYBOOK}
 
 mediacenter:
 	ansible-playbook ${30_MEDIA_CENTER_PLAYBOOK}
+
+k8s-local:
+	rm -rvf ~/.kube/confg
+	ansible-playbook ${90_K8SLOCAL_PLAYBOOK}
 
 helm:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts

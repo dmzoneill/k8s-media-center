@@ -1,0 +1,12 @@
+---
+- name: Deploy cAdvisor on Kubernetes using kubectl
+  hosts: local
+  tasks:
+    - name: Apply cAdvisor namespace
+      command: kubectl apply -f templates/cadvisor-namespace.yaml
+
+    - name: Apply cAdvisor deployment
+      command: kubectl apply -f templates/cadvisor-deployment.yaml
+      
+    - name: Apply cAdvisor service
+      command: kubectl apply -f templates/cadvisor-service.yaml
