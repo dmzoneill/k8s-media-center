@@ -1,0 +1,11 @@
+---
+
+- name: Copy squid config in place
+  ansible.builtin.copy:
+    src: "{{ PLAYBOOK_DIR }}/templates/squid.conf.j2"
+    dest: "/etc/squid/squid.conf"
+
+- name: Restart squid service
+  service:
+    name: squid
+    state: restarted

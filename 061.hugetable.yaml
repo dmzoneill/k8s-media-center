@@ -1,0 +1,34 @@
+---
+- name: Ensure hugepages kernel parameter is set
+  sysctl:
+    name: vm.nr_hugepages
+    value: "{{ hugepages }}"
+    state: present
+    reload: yes
+
+- name: Configure hugepages at boot time
+  lineinfile:
+    path: /etc/sysctl.conf
+    regexp: '^vm.nr_hugepages'
+    line: "vm.nr_hugepages = {{ hugepages }}"
+    state: present
+
+- name: Ensure hugepage mount directory exists
+  file:
+    path: /mnt/huge
+    state: directory
+    mode: '0755'
+
+- name: Mount hugepages filesystem
+  mount:
+    path: /mnt/huge
+    src: hugetlbfs
+    fstype: hugetlbfs
+    opts: mode=1770
+    state: mounted
+
+- name: Configure hugepages mount at boot time
+  lineinfile:
+    path: /etc/fstab
+    line: "hugetlbfs /mnt/huge hugetlbfs mode=1770 0 0"
+    state: present

@@ -1,0 +1,229 @@
+---
+- name: Create a thin-provisioned Fedora build
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
+  become: yes
+  tasks:
+    - name: Determine the operating system
+      ansible.builtin.setup:
+        filter: ansible_distribution
+      register: distro
+
+    - name: Set package and service lists based on OS
+      set_fact:
+        packages: "{{ debian_packages if distro.ansible_facts.ansible_distribution == 'Debian' else fedora_packages }}"
+        services: "{{ debian_services if distro.ansible_facts.ansible_distribution == 'Debian' else fedora_services }}"
+
+    - name: Install required software
+      package:
+        name: "{{ packages }}"
+        state: present
+
+    - name: Ensure services are started and enabled
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop: "{{ services }}"
+
+    - name: Check if Fedora ISO is already downloaded
+      stat:
+        path: "{{ PLAYBOOK_DIR }}/kickstart/fedora-server.iso"
+      register: iso_stat
+
+    - name: Download the latest Fedora Server ISO
+      get_url:
+        url: "{{ FEDORA_NETINSTALL_ISO }}"
+        dest: "{{ PLAYBOOK_DIR }}/kickstart/fedora-server.iso"
+        mode: '0644'
+      when: not iso_stat.stat.exists
+      become: no
+
+    - name: Create Kickstart file
+      copy:
+        dest: "{{ PLAYBOOK_DIR }}/kickstart/ks.cfg"
+        content: |
+          #version=Fedora Linux 40
+
+          # power off when done
+          poweroff
+
+          {% if PROXY_ENABLED == 1 %}
+          url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-40&arch=x86_64" --proxy="{{ PROXY }}"
+          {% else %}
+          url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-40&arch=x86_64"
+          {% endif %}
+
+          # repo --name=fedora-updates --baseurl="" "https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f40&arch=x86_64" --cost=0
+          # repo --name=rpmfusion-free --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-40&arch=x86_64"
+          # repo --name=rpmfusion-free-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-updates-released-40&arch=x86_64" --cost=0
+          # repo --name=rpmfusion-nonfree --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-40&arch=x86_64"
+          # repo --name=rpmfusion-nonfree-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-updates-released-40&arch=x86_64" --cost=0
+
+          # Configure Boot Loader
+          bootloader --driveorder=vda
+
+          # Remove all existing partitions
+          clearpart --drives=vda --all
+
+          # zerombr
+          zerombr
+
+          #Create required partitions (BIOS boot partition and /boot)
+          reqpart --add-boot
+
+          # Create Physical Partition
+          part pv.01 --ondrive=vda --asprimary --size=40000 --grow
+          volgroup vg pv.01
+          logvol / --vgname=vg --name=fedora-root --size=25000 --grow --fstype=ext4
+
+          # Configure Firewall
+          firewall --disabled
+
+          # Configure Network Interfaces
+          network --onboot=yes --bootproto=dhcp --hostname=k8s
+
+          # Configure Keyboard Layouts
+          keyboard us
+
+          # Configure Language During Installation
+          lang en_IE
+
+          # Configure Time Zone
+          timezone Ireland/Dublin
+
+          # Set Root Password
+          rootpw --plaintext 123456
+          sshkey --username root "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJHwlIktJUwqHSF23fM+X0112WDmESV90XkKQse//tt"
+
+          # user
+          user --name=k8s --password=k8s --groups=wheel --homedir=/home/k8s --plaintext
+          sshkey --username k8s "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJHwlIktJUwqHSF23fM+X0112WDmESV90XkKQse//tt"
+
+          # Perform Installation in Text Mode
+          text
+
+          # Package Selection
+          %packages
+          openssh-server
+          nfs-utils
+          %end
+
+          # Services to enable/disable
+          services --disabled=mlocate-updatedb,mlocate-updatedb.timer,geoclue,avahi-daemon
+
+          # Post-installation Script
+          %post
+
+          {% if PROXY_ENABLED == 1 %}
+          echo -e "\nproxy={{ PROXY }}" >> /etc/dnf/dnf.conf
+          {% endif %}
+
+          sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+          #Enable GPG keys for installed repos
+          cat <<EOF >> /etc/yum.repos.d/google-chrome.repo
+          gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
+          EOF
+
+          %end
+        mode: '0644'
+      become: no
+
+    - name: Install ksvalidator
+      package:
+        name: pykickstart
+        state: present
+
+    - name: Validate Kickstart file
+      command: ksvalidator "{{ PLAYBOOK_DIR }}/kickstart/ks.cfg"
+      register: ksvalidate_result
+      failed_when: ksvalidate_result.rc != 0
+      changed_when: false
+      become: yes
+
+    - name: Ensure the VM is shut down
+      command: virsh shutdown fedora-vm
+      ignore_errors: true
+      register: shutdown_result
+
+    - name: Wait for the VM to shut down
+      command: virsh list --all
+      register: list_result
+      until: "fedora-vm not in list_result.stdout"
+      retries: 5
+      delay: 10
+      ignore_errors: true
+
+    - name: Remove existing VM if it exists
+      command: virsh undefine fedora-vm
+      ignore_errors: true
+
+    - name: Remove leftover qcow2 image if it exists
+      file:
+        path: "{{ PLAYBOOK_DIR }}/kickstart/fedora-disk.qcow2"
+        state: absent
+      ignore_errors: true
+
+    - name: Ensure the default network is defined and started
+      command: >
+        virsh net-start default
+      register: net_result
+      changed_when: "'already active' not in net_result.stdout and 'started' in net_result.stdout"
+      ignore_errors: true
+
+    - name: Create a thin-provisioned 60GB HDD image
+      command: qemu-img create -f qcow2 "{{ PLAYBOOK_DIR }}/kickstart/fedora-disk.qcow2" 60G
+
+    - name: Verify the ISO file exists
+      stat:
+        path: "{{ PLAYBOOK_DIR }}/kickstart/fedora-server.iso"
+      register: iso_check
+
+    - name: Verify the Kickstart file exists
+      stat:
+        path: "{{ PLAYBOOK_DIR }}/kickstart/ks.cfg"
+      register: ks_check
+
+    - name: Debug ISO and Kickstart file check
+      debug:
+        msg:
+          - "ISO exists: {{ iso_check.stat.exists }}"
+          - "Kickstart file exists: {{ ks_check.stat.exists }}"
+
+    - name: Start VM and install Fedora using Kickstart
+      command: >
+        virt-install
+        --name fedora-vm
+        --ram 4096
+        --vcpus 2,sockets=1,cores=2,threads=1
+        --disk path={{ PLAYBOOK_DIR }}/kickstart/fedora-disk.qcow2,format=qcow2,bus=virtio
+        --graphics none
+        --video vga
+        --console pty,target_type=serial
+        --noreboot 
+        --noautoconsole
+        --import
+        --iothreads=4
+        --os-variant fedora38
+        --network network=default,model=virtio
+        --location "{{ PLAYBOOK_DIR }}/kickstart/fedora-server.iso"
+        --initrd-inject="{{ PLAYBOOK_DIR }}/kickstart/ks.cfg"
+        --extra-args "inst.ks=file:/ks.cfg console=ttyS0 edd=off"
+        --cpu host-passthrough,cache.mode=passthrough 
+      environment:
+        LIBGUESTFS_BACKEND: direct
+        
+    - name: Wait for VM to be in "off" state
+      shell: "virsh domstate fedora-vm | tr -d '\n' | grep -q 'shut off'"
+      register: vm_state_result
+      until: vm_state_result.rc == 0
+      retries: 60
+      delay: 30
+      ignore_errors: true
+
+    - name: Debug VM State Result
+      debug:
+        msg: "VM State is {{ 'shut off' if vm_state_result.rc == 0 else 'not shut off' }}"

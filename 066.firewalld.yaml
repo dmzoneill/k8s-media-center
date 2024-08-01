@@ -1,0 +1,30 @@
+---
+
+- name: Ensure squid service is added to firewalld in the public zone
+  firewalld:
+    service: squid
+    zone: public
+    permanent: true
+    state: enabled
+
+- name: Stop firewalld service
+  service:
+    name: firewalld
+    state: stopped
+    enabled: false
+
+- name: Enable squid access
+  ansible.builtin.iptables:
+    chain: LIBVIRT_OUT
+    protocol: tcp
+    destination_port: 3128
+    jump: ACCEPT
+  become: yes
+
+- name: Enable squid access
+  ansible.builtin.iptables:
+    chain: LIBVIRT_INP
+    protocol: tcp
+    destination_port: 3128
+    jump: ACCEPT
+  become: yes

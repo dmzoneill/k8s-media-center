@@ -1,0 +1,88 @@
+---
+
+- name: Add current user to libvirt group
+  user:
+    name: "{{ ansible_user_id }}"
+    groups: libvirt
+    append: yes
+
+- name: Add current user to libvirt-qemu group (if present)
+  user:
+    name: "{{ ansible_user_id }}"
+    groups: libvirt-qemu
+    append: yes
+  ignore_errors: yes
+
+- name: Configure libvirt to use hugepages
+  blockinfile:
+    path: /etc/libvirt/qemu.conf
+    block: |
+      # Configure QEMU to use hugepages
+      memory_backing_dir = "/mnt/huge"
+      hugepages = 1
+    create: yes
+    insertafter: EOF
+
+- name: Restart libvirt service to apply changes
+  service:
+    name: libvirtd
+    state: restarted
+
+- name: Ensure libvirt service is started and enabled
+  service:
+    name: libvirtd
+    state: started
+    enabled: yes
+
+- name: Grant search permissions for user home to qemu
+  command: "setfacl -m u:qemu:x {{ user_home }}"
+
+- name: Grant search permissions for storage directory to qemu
+  command: "setfacl -m u:qemu:rx {{ storage_path }}"
+
+- name: Create and start default network
+  virt:
+    command: define
+    xml: "{{ network_xml }}"
+    state: started
+    uri: qemu:///system
+  ignore_errors: yes
+
+- name: Start default network
+  command: >
+    virsh net-start default
+  ignore_errors: yes
+
+- name: Autostart default network
+  command: >
+    virsh net-autostart default
+  ignore_errors: yes
+
+- name: Create PolicyKit rule for libvirt
+  copy:
+    dest: /etc/polkit-1/rules.d/80-libvirt.rules
+    content: |
+      polkit.addRule(function(action, subject) {
+          if (action.id == "org.libvirt.unix.manage" &&
+              subject.isInGroup("libvirt")) {
+              return polkit.Result.YES;
+          }
+      });
+
+- name: Restart libvirt service to apply changes
+  service:
+    name: libvirtd
+    state: restarted
+
+- name: Configure nfs exports
+  blockinfile:
+    path: /etc/exports
+    block: |
+      {{PLAYBOOK_DIR}}/shared_data *(rw,sync,no_subtree_check,no_root_squash)
+    create: yes
+    insertafter: EOF
+
+- name: Export nfs shares
+  command: >
+    exportfs -r
+  ignore_errors: yes

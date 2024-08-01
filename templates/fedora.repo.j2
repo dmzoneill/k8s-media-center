@@ -1,0 +1,23 @@
+[Kent]
+name=Kent
+baseurl=https://www.mirrorservice.org/pub/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/
+enabled=0
+gpgcheck=1
+gpgkey=https://www.mirrorservice.org/pub/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/RPM-GPG-KEY-fedora-{{ releasever }}-{{ basearch }}
+priority=50
+
+[Rise]
+name=Rise
+baseurl=http://mirror.rise.ph/fedora/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/
+enabled=0
+gpgcheck=1
+gpgkey=http://mirror.rise.ph/fedora/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/RPM-GPG-KEY-fedora-{{ releasever }}-{{ basearch }}
+priority=50
+
+[NUSEDU]
+name=Download@NUS 
+baseurl=https://download.nus.edu.sg/mirror/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/
+enabled=1
+gpgcheck=1
+gpgkey=https://download.nus.edu.sg/mirror/fedora/linux/releases/{{ releasever }}/Everything/{{ basearch }}/os/RPM-GPG-KEY-fedora-{{ releasever }}-{{ basearch }}
+priority=50

@@ -1,5 +1,8 @@
 ---
 - name: Deploy Prometheus and Grafana on Kubernetes
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
   hosts: local
   tasks:
     - name: Create namespace for monitoring

@@ -1,7 +1,9 @@
 ---
 - name: Render Apps definition template
   hosts: master
-  gather_facts: false
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
   tasks:
 
     - name: Remove apps

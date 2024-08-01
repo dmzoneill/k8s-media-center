@@ -1,0 +1,83 @@
+#version=Fedora Linux 40
+
+repo --name="updates"  --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f$releasever&arch=$basearch --proxy=http://192.168.124.1:3128
+# repo --name="rpmfusion-free"  --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=free-fedora-$releasever&arch=$basearch --proxy=http://192.168.124.1:3128
+# repo --name="rpmfusion-free-updates"  --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=free-fedora-updates-released-$releasever&arch=$basearch --proxy=http://192.168.124.1:3128
+# repo --name="rpmfusion-nonfree"  --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-$releasever&arch=$basearch --proxy=http://192.168.124.1:3128
+# repo --name="rpmfusion-nonfree-updates"  --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-updates-released-$releasever&arch=$basearch --proxy=http://192.168.124.1:3128
+
+# Use network installation
+url --mirrorlist="https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch" --proxy=http://192.168.124.1:3128
+
+# INSTALL USING TEXT MODE
+text
+poweroff
+
+# KEYBOARDS, LANGUAGE, TIMEZONE
+keyboard --vckeymap=us --xlayouts=us
+lang en_US.UTF-8
+timezone Etc/UTC --utc
+eula --agreed
+
+# NETWORK, SELINUX, FIREWALL
+# Hostname must be separate from link config.
+network --hostname=k8s.domain
+network --device=link --activate --bootproto=dhcp --ipv6=dhcp --nameserver=8.8.8.8 --nameserver=8.8.4.4 --nameserver=1.1.1.1 --nameserver=1.1.0.0 --onboot=on
+selinux --permissive
+firewall --disabled --ssh
+
+# disk
+ignoredisk --only-use=vda
+clearpart --drives=vda --initlabel
+zerombr
+bootloader --location=mbr --append='crashkernel=auto'
+part /boot --fstype=ext4 --size=1024
+part biosboot --fstype=biosboot --size=1
+part / --fstype=ext4 --size=1 --grow
+
+# Allow root login over SSH
+rootpw --plaintext 123456
+sshkey --username root "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJHwlIktJUwqHSF23fM+X0112WDmESV90XkKQse//tt"
+
+%packages --retries=5 --timeout=20 --inst-langs=en
+@core
+@^minimal install
+bc
+bind-utils
+cifs-utils
+cryptsetup
+curl
+dosfstools
+expect
+firewalld
+git
+iotop
+ipa-client
+-iwl*-firmware
+man
+mlocate
+net-tools
+nfs-utils
+p7zip
+parted
+postfix
+python3-policycoreutils
+rpm-build
+rsync
+s-nail
+screen
+strace
+sysstat
+tcpdump
+telnet
+vim
+wget
+yum-utils
+%end
+
+# PermitRootLogin yes
+# Restart sshd
+%post --log=/root/ks-post.log
+  sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
+  systemctl restart sshd
+%end

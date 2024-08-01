@@ -2,3 +2,5 @@
 **/storage/**
 **/nfs/**
 **/helm/*.tgz
+kickstart/fedora-disk.qcow2
+kickstart/fedora-server.iso

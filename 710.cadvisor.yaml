@@ -1,5 +1,8 @@
 ---
 - name: Deploy cAdvisor on Kubernetes using kubectl
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
   hosts: local
   tasks:
     - name: Apply cAdvisor namespace

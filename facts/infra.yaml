@@ -1,21 +1,27 @@
+# User and paths
+libvirt_user: daoneill
+storage_path: "/home/daoneill/src/k8s-media-center/storage"
+user_home: "/home/daoneill"
+
 # facts.yml
-PLAYBOOK_DIR: /home/dave/src/cluster
+PLAYBOOK_DIR: /home/daoneill/src/k8s-media-center
 SHARED_MOUNT_POINT: shared_data
 MOUNT_POINT: /data
 POD_CIDR: 10.244.0.0/16
 default_route: 192.168.0.70
-primary_interface: enp2s0
+primary_interface: wlp9s0
 NET_MGR: "\"https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml\""
-PROXY: http://192.168.0.30:3128
+PROXY_ENABLED: 1
+PROXY: http://192.168.122.1:3128
+CACHE_PEER_ENABLED: 0
+CACHE_PEER: "10.38.5.42"
+CACHE_PEER_PORT: "3128"
 BASE_QCOW_IMAGE: fedora.qcow2
 
-# ceph
-public_network: 192.168.122.0/24
-cluster_network: 172.76.0.0/24
-monitoring_interface: enp2s0
-
-# libvirt user
-libvirt_user: dave
+LOCAL_IP_CMD: "hostname -I | cut -d' ' -f1"
+CNI_PLUGINS_URL: "https://github.com/containernetworking/plugins/releases/download/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz"
+FEDORA_NETINSTALL_ISO: "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Server/x86_64/iso/Fedora-Server-netinst-x86_64-40-1.14.iso"
+ROOT_PUBKEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJHwlIktJUwqHSF23fM+X0112WDmESV90XkKQse//tt"
 
 # VMs
 vms:
@@ -25,3 +31,122 @@ vms:
     cpuset: "3,4"
   - name: "k8s3"
     cpuset: "5,6"
+
+# Memory
+hugepages: 8192
+hugepage_size: 2048
+vm_memory: 4096
+
+# Apps
+applications:
+  - name: amd
+    ports:
+      - 5299
+  - name: sonarr
+    ports:
+      - 8989
+  - name: bazarr
+    ports:
+      - 6767
+  - name: calibre
+    ports:
+      - 8080
+      - 8081
+  - name: deluge
+    ports:
+      - 8112
+      - 55555
+  - name: jackett
+    ports:
+      - 9117
+  - name: librarian
+    ports:
+      - 8112
+  - name: lidarr
+    ports:
+      - 8686
+  - name: mylar3
+    ports:
+      - 8090
+  - name: organizr
+    ports:
+      - 9134
+  - name: plex
+    ports:
+      - 32400
+  - name: privoxy
+    ports:
+      - 8118
+  - name: prowlarr
+    ports:
+      - 8787
+  - name: radarr
+    ports:
+      - 7878
+  - name: readarr
+    ports:
+      - 8787
+  - name: squid
+    ports:
+      - 3128
+  - name: tdarr
+    ports:
+      - 8265
+      - 8266
+  - name: tracktar
+    ports:
+      - 7777
+
+# packages
+debian_packages:
+  - nfs-kernel-server
+  - nfs-common
+  - libvirt-daemon
+  - libvirt-clients
+  - qemu-kvm
+  - bridge-utils
+  - virt-manager
+  - squid*
+
+fedora_packages:
+  - nfs-utils*
+  - libvirt
+  - qemu-kvm
+  - libvirt-client
+  - virt-install
+  - bridge-utils
+  - virt-manager
+  - squid*
+
+# Services
+debian_services:
+  - nfs-kernel-server
+  - libvirtd
+  - squid
+
+fedora_services:
+  - nfs-server
+  - libvirtd
+  - squid
+
+# Network defintion
+network_name: "default"
+network_xml: "
+  <network>
+    <name>default</name>
+    <uuid>c31b1a8a-4f9e-4a8b-aed5-2495c361e537</uuid>
+    <forward mode='nat'/>
+    <bridge name='virbr0' stp='on' delay='0'/>
+    <mac address='52:54:00:89:d8:99'/>
+    <ip address='192.168.124.1' netmask='255.255.255.0'>
+      <dhcp>
+        <range start='192.168.124.2' end='192.168.124.254'/>
+      </dhcp>
+    </ip>
+  </network>
+"
+
+# ceph
+public_network: 192.168.124.0/24
+cluster_network: 172.76.0.0/24
+monitoring_interface: wlp9s0

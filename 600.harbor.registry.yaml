@@ -1,24 +1,23 @@
 ---
-- name: Setup Harbor container registry on Fedora
-  hosts: registry
+- name: Setup Harbor container registry on Fedora with containerd
+  hosts: master
   become: true
   tasks:
-
-    - name: Install necessary packages
+    - name: Install necessary packages for Containerd
       dnf:
         name: "{{ item }}"
         state: present
       with_items:
-        - docker
+        - containerd.io
         - python3-pip
 
-    - name: Install Docker Compose via pip
+    - name: Install Docker Compose via pip (optional, if needed)
       pip:
         name: docker-compose
 
-    - name: Start and enable Docker service
+    - name: Start and enable Containerd service
       systemd:
-        name: docker
+        name: containerd
         state: started
         enabled: yes
 
@@ -35,43 +34,24 @@
 
     - name: Copy Harbor configuration template
       template:
-        src: harbor.yml.j2
+        src: harbor.yml.j2  # Replace with your actual Harbor configuration template
         dest: /opt/harbor/harbor.yml
 
-    - name: Install Harbor
+    - name: Install Harbor with Containerd
       shell: |
         cd /opt/harbor
-        ./install.sh
+        ./install.sh --with-containerd
 
     - name: Ensure Harbor is running
-      docker_compose:
-        project_src: /opt/harbor
-        state: present
-        restarted: true
-
-- name: Configure Kubernetes to use the Harbor registry
-  hosts: k8s_nodes
-  become: true
-  tasks:
-    - name: Create Docker config directory
-      file:
-        path: /etc/docker
-        state: directory
-
-    - name: Create Docker daemon.json file for insecure registry
-      copy:
-        dest: /etc/docker/daemon.json
-        content: |
-          {
-            "insecure-registries" : ["{{ hostvars['registry'].ansible_default_ipv4.address }}"]
-          }
-
-    - name: Restart Docker to apply the new configuration
       systemd:
-        name: docker
-        state: restarted
+        name: harbor
+        state: started
         enabled: yes
 
+- name: Configure Kubernetes to use the Harbor registry
+  hosts: vms
+  become: true
+  tasks:
     - name: Create a Kubernetes secret for the Harbor registry
       shell: |
         kubectl create secret docker-registry harbor-regcred \

@@ -56,22 +56,25 @@
       with_items: "{{ hosts_entries.split('\n') }}"
       when: item.strip() != ""
 
-    - name: Set DNF proxy
-      lineinfile:
-        path: /etc/dnf/dnf.conf
-        line: "proxy={{ PROXY }}"
-        create: yes
+    - name: Configure main dnf config
+      ansible.builtin.template:
+        src: templates/dnf.conf.j2
+        dest: /etc/dnf/dnf.conf
+
+    - name: Configure dnf for a specific repository
+      ansible.builtin.template:
+        src: templates/fedora.repo.j2
+        dest: /etc/yum.repos.d/fedora.repo
+      vars:
+        releasever: "{{ ansible_distribution_major_version }}"
+        basearch: "{{ ansible_architecture }}"
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Create the Kubernetes repository file
-      copy:
-        content: |
-          [kubernetes]
-          name=Kubernetes
-          baseurl=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
-          enabled=1
-          gpgcheck=1
-          gpgkey=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
-          exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+      ansible.builtin.template:
+        src: templates/k8s.repo.j2
         dest: /etc/yum.repos.d/kubernetes.repo
         owner: root
         group: root
@@ -221,6 +224,16 @@
     #       options edns0 trust-ad
     #       search .
 
+    - name: Create systemd drop-in directory for containerd service
+      ansible.builtin.file:
+        path: /etc/systemd/system/containerd.service.d
+        state: directory
+
+    - name: Create systemd drop-in config file for containerd service
+      ansible.builtin.template:
+        src: templates/containerd-proxy.conf.j2
+        dest: /etc/systemd/system/containerd.service.d/proxy.conf
+ 
     - name: Reboot the machine
       reboot:
         msg: "Rebooting after initial setup"

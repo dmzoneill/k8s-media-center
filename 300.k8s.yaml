@@ -10,6 +10,30 @@
         path: /etc/kubernetes/admin.conf
       register: kubeadm_initialized
 
+    # Set HTTP_PROXY environment variable
+    - name: Set HTTP_PROXY environment variable
+      ansible.builtin.command:
+        cmd: "systemctl set-environment HTTP_PROXY={{ PROXY }}"
+      when: PROXY_ENABLED == 1
+    
+    # Set HTTPS_PROXY environment variable
+    - name: Set HTTPS_PROXY environment variable
+      ansible.builtin.command:
+        cmd: "systemctl set-environment HTTPS_PROXY={{ PROXY }}"
+      when: PROXY_ENABLED == 1
+
+    - name: Restart service containerd
+      ansible.builtin.systemd_service:
+        state: restarted
+        daemon_reload: true
+        name: containerd
+
+    - name: Restart service kubelet
+      ansible.builtin.systemd_service:
+        state: restarted
+        daemon_reload: true
+        name: kubelet
+
     - name: Initialize Kubernetes master node
       shell: kubeadm init --pod-network-cidr={{ POD_CIDR }}
       register: kubeadm_init
@@ -78,14 +102,17 @@
       become: yes
 
 - name: Configure CNI/CRI
+  vars_files:
+    - facts/infra.yaml
+  gather_facts: yes
   hosts: vms
   tasks:
     - name: Install CNI plugins
       become: yes
       shell: |
         mkdir -p /opt/cni/bin
-        curl -O -L https://github.com/containernetworking/plugins/releases/download/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz
-        tar -C /opt/cni/bin -xzf cni-plugins-linux-amd64-v1.2.0.tgz
+        curl -L {{ CNI_PLUGINS_URL }} -o cni.tgz
+        tar -C /opt/cni/bin -xzf cni.tgz
       ignore_errors: true
 
     - name: Create bridge CNI configuration

@@ -1,0 +1,36 @@
+---
+- name: Host setup
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
+  become: yes
+  tasks:
+
+    - name: Squid
+      include_tasks: 065.squid.yaml
+
+    - name: Hugepages
+      include_tasks: 061.hugetable.yaml
+
+    - name: Packages & services
+      include_tasks: 062.packages_services.yaml
+
+    - name: Shared data / NFS
+      include_tasks: 063.shared_data_nfs.yaml
+
+    - name: Libvirt qemu
+      include_tasks: 064.libvirt_qemu.yaml
+
+    - name: Firewalld
+      include_tasks: 066.firewalld.yaml
+
+    - name: Reboot the server if required
+      reboot:
+        msg: "Reboot initiated by Ansible"
+        when: reboot_required.stat.exists
+
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required

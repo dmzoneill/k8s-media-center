@@ -1,0 +1,70 @@
+# debugging
+debug_options ALL,1 33,2 28,9
+
+# Access logs
+access_log stdio:/var/log/squid/access.log squid
+logformat cache_hit_log %ts.%03tu %6tr %>a %Ss/>Hs %<st %rm %ru %un %Sh/%<A %mt
+access_log stdio:/var/log/squid/cache_hits.log cache_hit_log
+
+# ACLs
+acl localnet src 10.0.0.0/8  # RFC 1918 local private network (LAN)
+acl localnet src 172.16.0.0/12  # RFC 1918 local private network (LAN)
+acl localnet src 192.168.0.0/16  # RFC 1918 local private network (LAN)
+acl localnet src fc00::/7  # RFC 4193 local private network range
+acl localnet src fe80::/10  # RFC 4291 link-local (directly plugged) machines
+
+acl SSL_ports port 443
+acl Safe_ports port 80        # http
+acl Safe_ports port 21        # ftp
+acl Safe_ports port 443       # https
+acl Safe_ports port 70        # gopher
+acl Safe_ports port 210       # wais
+acl Safe_ports port 1025-65535  # unregistered ports
+acl Safe_ports port 280       # http-mgmt
+acl Safe_ports port 488       # gss-http
+acl Safe_ports port 591       # filemaker
+acl Safe_ports port 777       # multiling http
+
+# HTTP access rules
+# http_access deny !Safe_ports
+# http_access deny CONNECT !SSL_ports
+# http_access allow manager localhost localnet to_linklocal to_localhost
+# http_access deny all
+http_access allow CONNECT SSL_ports
+http_access allow all
+
+# HTTP port
+http_port 0.0.0.0:3128
+
+# Cache settings
+cache_mem 2048 MB
+maximum_object_size 1024 MB
+cache_dir ufs /var/spool/squid 10000 16 256
+
+# Refresh patterns
+refresh_pattern ^ftp:          1440    20%     10080
+refresh_pattern -i (/cgi-bin/|\?) 0    0%      0
+refresh_pattern .              1440    50%     43200
+refresh_pattern \.rpm$         1440    100%    43200
+refresh_pattern \.xml$         1440    100%    43200
+refresh_pattern \.sqlite$      1440    100%    43200
+refresh_pattern \.sqlite.bz2$  1440    100%    43200
+refresh_pattern \.asc$         1440    100%    43200
+refresh_pattern release$       1440    100%    43200
+refresh_pattern Packages\.gz$  1440    100%    43200
+refresh_pattern Packages\.bz2$ 1440    100%    43200
+refresh_pattern Packages$      1440    100%    43200
+refresh_pattern sources\.bz2$  1440    100%    43200
+refresh_pattern metadata\.xml$ 1440    100%    43200
+refresh_pattern filelist\.xml$ 1440    100%    43200
+refresh_pattern repomd\.xml$   1440    100%    43200
+
+{% if CACHE_PEER_ENABLED == 1 %}
+# Cache peer
+cache_peer 10.38.5.42 parent 3128 0 no-query default
+never_direct allow all
+{% endif %}
+
+# Miscellaneous
+coredump_dir /var/spool/squid
+

@@ -6,8 +6,8 @@
 - containerd
 - flannel networking
 - nfs storage
-- partial support for ceph/glucterfs - not working
-- wip wiregaurd
-- wip promethus / grafana  
+- partial support for ceph/glusterfs - not working
+- wip wireguard
+- wip prometheus / grafana  
 - wip custom routing
-
+- kickstart build base image

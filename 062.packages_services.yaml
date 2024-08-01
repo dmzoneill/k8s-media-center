@@ -1,0 +1,23 @@
+---
+
+- name: Determine the operating system
+  ansible.builtin.setup:
+    filter: ansible_distribution
+  register: distro
+
+- name: Set package and service lists based on OS
+  set_fact:
+    packages: "{{ debian_packages if distro.ansible_facts.ansible_distribution == 'Debian' else fedora_packages }}"
+    services: "{{ debian_services if distro.ansible_facts.ansible_distribution == 'Debian' else fedora_services }}"
+
+- name: Install NFS and virtualization packages
+  package:
+    name: "{{ packages }}"
+    state: present
+
+- name: Ensure services are started and enabled
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop: "{{ services }}"

@@ -6,6 +6,19 @@
     - facts/infra.yaml
   tasks:
 
+    - name: Check if Fedora disk image exists and is at least 500MB
+      stat:
+        path: "{{ PLAYBOOK_DIR }}/kickstart/fedora-disk.qcow2"
+      register: disk_stat
+
+    - name: Copy Fedora disk image if conditions are met
+      ansible.builtin.copy:
+        src: "{{ PLAYBOOK_DIR }}/kickstart/fedora-disk.qcow2"
+        dest: "{{ PLAYBOOK_DIR }}/storage/fedora.qcow2"
+      when:
+        - disk_stat.stat.exists
+        - disk_stat.stat.size >= 500 * 1024 * 1024
+
     - name: Create thin-provisioned disk images
       command: >
         qemu-img create -f qcow2 -F qcow2 -b {{ PLAYBOOK_DIR }}/storage/{{ BASE_QCOW_IMAGE }}

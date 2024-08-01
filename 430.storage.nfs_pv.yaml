@@ -1,14 +1,19 @@
 ---
 - name: Get local IP address
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
   hosts: localhost
   tasks:
     - name: Get local IP address
-      shell: hostname -I | cut -d' ' -f1
+      shell: "{{ LOCAL_IP_CMD }}"
       register: local_ip
 
 - name: Render PV definition template
   hosts: master
-  gather_facts: false
+  gather_facts: yes
+  vars_files:
+    - facts/infra.yaml
   tasks:
     - name: Set fact
       set_fact:

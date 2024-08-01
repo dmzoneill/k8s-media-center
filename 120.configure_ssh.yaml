@@ -1,0 +1,11 @@
+---
+- name: Gather inventory hostname and IP mappings
+  hosts: vms
+  vars_files:
+    - facts/infra.yaml
+  tasks:
+    - name: Install ssh-ed25519 public key for root user
+      authorized_key:
+        user: root
+        key: "{{ ROOT_PUBKEY }}"
+        state: present
