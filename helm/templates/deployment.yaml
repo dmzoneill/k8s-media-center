@@ -12,9 +12,17 @@ spec:
       labels:
         app: vpn
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: vpn
           image: dperson/openvpn-client:latest
+          resources:
+            requests:
+              memory: 64Mi
+              ephemeral-storage: 100Mi
+            limits:
+              memory: 256Mi
+              ephemeral-storage: 1Gi
           ports:
             - containerPort: 8112
             - containerPort: 55555
