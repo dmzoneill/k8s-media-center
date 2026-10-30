@@ -12,9 +12,17 @@ spec:
       labels:
         app: sonarr
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: sonarr
         image: lscr.io/linuxserver/sonarr:latest
+        resources:
+          requests:
+            memory: 256Mi
+            ephemeral-storage: 500Mi
+          limits:
+            memory: 1Gi
+            ephemeral-storage: 2Gi
         env:
         - name: PUID
           value: "1000"
