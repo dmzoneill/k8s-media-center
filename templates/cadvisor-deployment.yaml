@@ -17,6 +17,8 @@ spec:
       containers:
       - name: cadvisor
         image: gcr.io/google-containers/cadvisor:v0.38.8
+        securityContext:
+          allowPrivilegeEscalation: false
         resources:
           requests:
             memory: 128Mi
