@@ -16,6 +16,8 @@ spec:
       containers:
         - name: vpn
           image: dperson/openvpn-client:latest
+          securityContext:
+            allowPrivilegeEscalation: false
           resources:
             requests:
               memory: 64Mi
